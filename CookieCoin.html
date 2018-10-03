@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta name="description" content="Cookie Coin Wallet">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width">
+  <title>Cookie Coin</title>
+	<style>
+
+#output {
+	width: 200px;
+	margin: 10px;
+	word-wrap: break-word;
+}
+
+	</style>
+</head>
+<body>
+	<script type="text/javascript">
+
+var walletName = "";
+
+function l(id) {return document.getElementById(id);}
+
+function put(packet, name) {
+	window.localStorage[name] = packet;
+}
+
+function get(name) {
+	return window.localStorage[name];
+}
+
+function hash(string) {
+  var hash = 0, i, chr, len;
+  if (string.length === 0) return hash;
+  for (i = 0, len = string.length; i < len; i++) {
+    chr   = string.charCodeAt(i);
+    hash  = ((hash << 5) - hash) + chr;
+    hash |= 0; // Convert to 32bit integer
+  }
+  return hash;
+}
+
+function toPacket(object, type) {
+	var data = JSON.stringify(object);
+	var hashCode = hash(data);
+	var packet = {
+		t: type,
+		d: data,
+		h: hashCode
+	};
+	return btoa(JSON.stringify(packet));
+}
+
+function fromPacket(string) {
+	var packet = JSON.parse(atob(string));
+	var hashCode = hash(packet.d);
+	if(packet.h === hashCode) {
+		return {
+			valid: true,
+			type: packet.t,
+			data: JSON.parse(packet.d)
+		};
+	} else {
+		return {
+			valid: false
+		};
+	}
+}
+
+function Wallet() {
+	this.id = Math.random();
+	this.age = 0;
+	this.coins = 0;
+	this.activeTickets = [];
+}
+
+function getWallet() {
+	// Get wallet packet from cookie
+	var packet = fromPacket(get(walletName));
+	
+	// Extract wallet
+	if(!packet.valid) return;
+	var wallet = packet.data;
+	
+	// Cleanup wallet
+	var today = new Date();
+	for(var i = 0; i < wallet.activeTickets; i++) {
+		if((new Date(wallet.activeTickets[i].due + "Z")) < today) {
+			wallet.activeTickets.splice(i, 1);
+			i--;
+		}
+	}
+	
+	// Return packet contents
+	return wallet;
+}
+
+function saveWallet(wallet) {
+	put(toPacket(wallet, "wallet"), walletName);
+}
+
+
+
+
+
+
+
+
+
+
+// Open a wallet
+function actionOpenWallet() {
+	// Get name of wallet
+	walletName = prompt("Name:");
+}
+
+
+
+
+// Make a new wallet
+function actionNewWallet() {
+	// Make a new wallet
+	var wallet = new Wallet();
+	
+	// Get name of new wallet
+	walletName = prompt("Name:");
+	
+	// Store new wallet
+	saveWallet(wallet);
+}
+
+
+
+
+// Generate a ticket
+function actionNewTicket() {
+	// Get wallet
+	var wallet = getWallet();
+	
+	// Generate a ticket
+	var num = wallet.age++;
+	var from = wallet.id;
+	var due = new Date();
+	due.setDate(due.getDate() + 1);
+	
+	// Add ticket to wallet
+	wallet.activeTickets.push({
+		due: due.toUTCString(),
+		num: num
+	});
+	
+	// Give ticket to player
+	l("output").innerHTML = toPacket({
+		f: from,
+		n: num
+	}, "ticket");
+	
+	// Save wallet
+	saveWallet(wallet);
+}
+
+
+
+
+// Generate a check
+function actionNewCheck() {
+	// Ask for ticket
+	var packet = fromPacket(prompt("Ticket"));
+	if(!packet.valid) return;
+	var ticket = packet.data;
+	
+	// Get wallet
+	var wallet = getWallet();
+	
+	// Ask for amount
+	var amount;
+	var notValid;
+	do {
+		notValid = false;
+		amount = prompt("Amount:");
+		if(!amount) return;
+		var num = new Number(amount);
+		if(num === NaN) notValid = true;
+		if(num < 0) notValid = true;
+		if(num % 1 !== 0) notValid = true;
+		if(num > wallet.coins) notValid = true;
+	} while(notValid);
+	
+	// Subtract amount from wallet
+	wallet.coins -= amount;
+	
+	// Give check to player
+	l("output").innerHTML = toPacket({
+		f: wallet.id,
+		t: ticket.f,
+		n: ticket.n,
+		a: amount
+	}, "check");
+	
+	// Save wallet
+	saveWallet(wallet);
+}
+
+
+
+
+// Cash a check
+function actionCashCheck() {
+	// Ask for check
+	var packet = fromPacket(prompt("Check:"));
+	if(!packet.valid) return;
+	var check = packet.data;
+	
+	// Get wallet
+	var wallet = getWallet();
+	
+	// Validate
+	if(wallet.id !== check.t) return;
+	var verified = false;
+	for(var i = 0; i < wallet.activeTickets.length; i++) {
+		if(wallet.activeTickets[i].num === check.n) {
+			verified = true;
+			wallet.activeTickets.splice(i, 1);
+			break;
+		}
+	}
+	if(!verified) return;
+	
+	// Add amount to wallet
+	wallet.coins += check.a *1;
+	
+	// Save wallet
+	saveWallet(wallet);
+}
+
+
+
+
+// Get wallet info
+function actionGetWalletInfo() {
+	// Get wallet
+	var wallet = getWallet();
+	
+	// Give player information about wallet
+	l("output").innerHTML = "Coins: " + wallet.coins;
+}
+
+	</script>
+	<input type="button" value="Open Wallet" onclick="actionOpenWallet()"><br>
+	<input type="button" value="Create New Wallet" onclick="actionNewWallet()"><br>
+	<input type="button" value="Print Address Ticket" onclick="actionNewTicket()"><br>
+	<input type="button" value="Write Check" onclick="actionNewCheck()"><br>
+	<input type="button" value="Cash Check" onclick="actionCashCheck()"><br>
+	<input type="button" value="Get Balance" onclick="actionGetWalletInfo()"><br>
+	<div id="output"></div>
+</body>
+</html>
