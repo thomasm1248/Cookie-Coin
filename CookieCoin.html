@@ -7,10 +7,40 @@
   <title>Cookie Coin</title>
 	<style>
 
+* {
+	outline: none;
+}
+
+#container {
+	width: 450px;
+	margin: 100px auto 0;
+}
+
+#action-menu {
+	width: 438px;
+	border: 1px solid grey;
+	border-radius: 5px;
+	margin-bottom: 6px;
+	padding: 5px;
+	text-align: center;
+}
+
+#input {
+	width: 200px;
+	height: 200px;
+	resize: none;
+	padding: 10px;
+	border-radius: 5px;
+	border: 1px solid grey;
+}
 #output {
 	width: 200px;
-	margin: 10px;
+	min-height: 200px;
 	word-wrap: break-word;
+	border-radius: 5px;
+	border: 1px solid grey;
+	padding: 10px;
+	float: right;
 }
 
 	</style>
@@ -70,14 +100,19 @@ function fromPacket(string) {
 
 function Wallet() {
 	this.id = Math.random();
-	this.age = 0;
+	this.ver = 1;
 	this.coins = 0;
 	this.activeTickets = [];
 }
 
 function getWallet() {
 	// Get wallet packet from cookie
-	var packet = fromPacket(get(walletName));
+	var encodedPacket = get(walletName);
+	if(encodedPacket !== undefined) {
+		var packet = fromPacket(encodedPacket);
+	} else {
+		return false;
+	}
 	
 	// Extract wallet
 	if(!packet.valid) return;
@@ -86,7 +121,7 @@ function getWallet() {
 	// Cleanup wallet
 	var today = new Date();
 	for(var i = 0; i < wallet.activeTickets; i++) {
-		if((new Date(wallet.activeTickets[i].due + "Z")) < today) {
+		if((new Date(wallet.activeTickets[i][1] + "Z")) < today) {
 			wallet.activeTickets.splice(i, 1);
 			i--;
 		}
@@ -113,6 +148,16 @@ function saveWallet(wallet) {
 function actionOpenWallet() {
 	// Get name of wallet
 	walletName = prompt("Name:");
+	
+	// Get wallet
+	var wallet = getWallet();
+	
+	// Print Info
+	if(wallet) {
+		l("output").innerHTML = "Coins: " + wallet.coins;
+	} else {
+		l("output").innerHTML = "Sorry, this wallet doesn't exist.";
+	}
 }
 
 
@@ -126,6 +171,9 @@ function actionNewWallet() {
 	// Get name of new wallet
 	walletName = prompt("Name:");
 	
+	// Print info
+	l("output").innerHTML = "Coins: " + wallet.coins;
+	
 	// Store new wallet
 	saveWallet(wallet);
 }
@@ -137,24 +185,22 @@ function actionNewWallet() {
 function actionNewTicket() {
 	// Get wallet
 	var wallet = getWallet();
+	if(!wallet) return;
 	
 	// Generate a ticket
-	var num = wallet.age++;
+	var num = Math.random();
 	var from = wallet.id;
 	var due = new Date();
 	due.setDate(due.getDate() + 1);
 	
 	// Add ticket to wallet
-	wallet.activeTickets.push({
-		due: due.toUTCString(),
-		num: num
-	});
+	wallet.activeTickets.push([
+		num,
+		due.toUTCString()
+	]);
 	
 	// Give ticket to player
-	l("output").innerHTML = toPacket({
-		f: from,
-		n: num
-	}, "ticket");
+	l("output").innerHTML = "Coins: " + wallet.coins + "<br><br>Email this to the person you want coins from (expires in 24 hours):<br><br>" + toPacket([num, from], "Tv1");
 	
 	// Save wallet
 	saveWallet(wallet);
@@ -164,39 +210,35 @@ function actionNewTicket() {
 
 
 // Generate a check
-function actionNewCheck() {
-	// Ask for ticket
-	var packet = fromPacket(prompt("Ticket"));
-	if(!packet.valid) return;
-	var ticket = packet.data;
-	
+function newCheck(ticket) {
 	// Get wallet
 	var wallet = getWallet();
 	
 	// Ask for amount
 	var amount;
 	var notValid;
+	var promptMessage = "You have: " + wallet.coins + ". How much do you want to send?";
 	do {
 		notValid = false;
-		amount = prompt("Amount:");
-		if(!amount) return;
+		amount = prompt(promptMessage);
+		if(!amount) {
+			l("output").innerHTML = "Coins: " + wallet.coins + "<br><br>Transaction canceled.";
+			return;
+		}
 		var num = new Number(amount);
 		if(num === NaN) notValid = true;
 		if(num < 0) notValid = true;
 		if(num % 1 !== 0) notValid = true;
 		if(num > wallet.coins) notValid = true;
+		promptMessage = "Not valid. You have: " + wallet.coins + ". How much do you want to send?";
 	} while(notValid);
 	
 	// Subtract amount from wallet
 	wallet.coins -= amount;
 	
 	// Give check to player
-	l("output").innerHTML = toPacket({
-		f: wallet.id,
-		t: ticket.f,
-		n: ticket.n,
-		a: amount
-	}, "check");
+	ticket.push(amount);
+	l("output").innerHTML = "Coins: " + wallet.coins + "<br><br>Email this to the person who gave you the ticket:<br><br>" + toPacket(ticket, "Cv1");
 	
 	// Save wallet
 	saveWallet(wallet);
@@ -206,29 +248,30 @@ function actionNewCheck() {
 
 
 // Cash a check
-function actionCashCheck() {
-	// Ask for check
-	var packet = fromPacket(prompt("Check:"));
-	if(!packet.valid) return;
-	var check = packet.data;
-	
+function cashCheck(check) {
 	// Get wallet
 	var wallet = getWallet();
 	
 	// Validate
-	if(wallet.id !== check.t) return;
+	if(wallet.id !== check[1]) return;
 	var verified = false;
 	for(var i = 0; i < wallet.activeTickets.length; i++) {
-		if(wallet.activeTickets[i].num === check.n) {
+		if(wallet.activeTickets[i][0] === check[0]) {
 			verified = true;
 			wallet.activeTickets.splice(i, 1);
 			break;
 		}
 	}
-	if(!verified) return;
+	if(!verified) {
+		l("output").innerHTML = "Coins: " + wallet.coins + "<br><br>The check either isn't for you, or it's ticket has expired (24 hours after printing ticket).";
+		return;
+	}
 	
 	// Add amount to wallet
-	wallet.coins += check.a *1;
+	wallet.coins += check[2] *1;
+	
+	// Print info
+	l("output").innerHTML = "Coins: " + wallet.coins + "<br><br>A check for " + check[2] + " coins has been added to your wallet.";
 	
 	// Save wallet
 	saveWallet(wallet);
@@ -237,22 +280,53 @@ function actionCashCheck() {
 
 
 
-// Get wallet info
-function actionGetWalletInfo() {
-	// Get wallet
-	var wallet = getWallet();
+// Scan input
+function actionScanInput() {
+	// Read input into a variable
+	var input = l("input").value;
+	l("input").value = "";
 	
-	// Give player information about wallet
-	l("output").innerHTML = "Coins: " + wallet.coins;
+	// Test input
+	var valid = true;
+	try {
+		input = fromPacket(input);
+	} catch(e) {
+		valid = false;
+	}
+	
+	if(valid) {
+		if(!input.valid) {
+			valid = false;
+		}
+	}
+	
+	if(valid) {
+		switch(input.type) {
+			case "Tv1":
+				newCheck(input.data);
+				break;
+			case "Cv1":
+				cashCheck(input.data);
+				break;
+		}
+	}
+	
+	// Print Error if not valid
+	if(!valid) {
+		l("output").innerHTML = "Input was not a valid packet.";
+	}
 }
 
 	</script>
-	<input type="button" value="Open Wallet" onclick="actionOpenWallet()"><br>
-	<input type="button" value="Create New Wallet" onclick="actionNewWallet()"><br>
-	<input type="button" value="Print Address Ticket" onclick="actionNewTicket()"><br>
-	<input type="button" value="Write Check" onclick="actionNewCheck()"><br>
-	<input type="button" value="Cash Check" onclick="actionCashCheck()"><br>
-	<input type="button" value="Get Balance" onclick="actionGetWalletInfo()"><br>
-	<div id="output"></div>
+	<div id="container">
+		<div id="action-menu">
+			<input type="button" value="Open" onclick="actionOpenWallet()">
+			<input type="button" value="New" onclick="actionNewWallet()">
+			<input type="button" value="Print Ticket" onclick="actionNewTicket()">
+			<input type="button" value="Scan Input" onclick="actionScanInput()">
+		</div>
+		<textarea id="input" placeholder="Packet Input"></textarea>
+		<div id="output">Welcome to Cookie Coin! <br><br> To start, open a wallet stored on this device or create a new, empty wallet. <br><br> What's this? This is a relatively cheat proof virtual currency that you can use among your friends. <br><br> How to use this:<br>To get coins from someone, print and send them a ticket. They will paste it into the "Packet Input", then click "Scan Input". They then send you a check that you paste into the "Packet Input" and click "Scan Input". That's it!</div>
+	</div>
 </body>
 </html>
