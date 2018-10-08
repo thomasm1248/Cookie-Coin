@@ -71,25 +71,20 @@ function hash(string) {
   return hash;
 }
 
-function toPacket(object, type) {
-	var data = JSON.stringify(object);
-	var hashCode = hash(data);
-	var packet = {
-		t: type,
-		d: data,
-		h: hashCode
-	};
+function toPacket(data, type) {
+	var hashCode = hash(JSON.stringify(data));
+	var packet = [type, data, hashCode];
 	return btoa(JSON.stringify(packet));
 }
 
 function fromPacket(string) {
 	var packet = JSON.parse(atob(string));
-	var hashCode = hash(packet.d);
-	if(packet.h === hashCode) {
+	var hashCode = hash(JSON.stringify(packet[1]));
+	if(packet[2] === hashCode) {
 		return {
 			valid: true,
-			type: packet.t,
-			data: JSON.parse(packet.d)
+			type: packet[0],
+			data: packet[1]
 		};
 	} else {
 		return {
