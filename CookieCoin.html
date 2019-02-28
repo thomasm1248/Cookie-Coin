@@ -131,6 +131,27 @@ function saveWallet(wallet) {
 	put(toPacket(wallet), walletName);
 }
 
+function display(wallet, extra) {
+	text = "";
+	
+	// Coins
+	text += "You have " + wallet.coins + " coins.";
+	
+	// Addresses
+	text += "<br><br>Addresses:";
+	for(var i = 0; i < wallet.addresses.length; i++) {
+		text += "<br>" + wallet.addresses[i];
+	}
+	
+	// Extra
+	if(extra) {
+		text += "<br><br>" + extra;
+	}
+	
+	// Output text
+	l("output").innerHTML = text;
+}
+
 
 
 
@@ -150,10 +171,7 @@ function actionOpenWallet() {
 	
 	// Print Info
 	if(wallet) {
-		l("output").innerHTML = "Coins: " + wallet.coins + "<br><br>Addresses:";
-		for(var i = 0; i < wallet.addresses.length; i++) {
-			l("output").innerHTML += "<br>" + wallet.addresses[i];
-		}
+		display(wallet);
 	} else {
 		l("output").innerHTML = "Sorry, this wallet doesn't exist.";
 	}
@@ -171,10 +189,7 @@ function actionNewWallet() {
 	walletName = prompt("Name:");
 	
 	// Print info
-	l("output").innerHTML = "Coins: " + wallet.coins + "<br><br>Addresses:";
-	for(var i = 0; i < wallet.addresses.length; i++) {
-		l("output").innerHTML += "<br>" + wallet.addresses[i];
-	}
+	display(wallet);
 	
 	// Store new wallet
 	saveWallet(wallet);
@@ -204,7 +219,7 @@ function actionWriteCheck() {
 		notValid = false;
 		amount = prompt(promptMessage);
 		if(!amount) {
-			l("output").innerHTML = "Coins: " + wallet.coins + "<br><br>Transaction canceled.";
+			display(wallet, "Transaction canceled.");
 			return;
 		}
 		var num = new Number(amount);
@@ -219,7 +234,7 @@ function actionWriteCheck() {
 	wallet.coins -= amount;
 	
 	// Give check to player
-	l("output").innerHTML = "Coins: " + wallet.coins + "<br><br>Email this to the person you're sending money to:<br><br>" + toPacket([address, amount]);
+	display(wallet, "Email this to the person you're sending money to:<br><br>" + toPacket([address, amount]));
 	
 	// Save wallet
 	saveWallet(wallet);
@@ -244,7 +259,7 @@ function cashCheck(check) {
 		}
 	}
 	if(!verified) {
-		l("output").innerHTML = "Coins: " + wallet.coins + "<br><br>The check was written to an address that isn't yours.";
+		display(wallet, "The check was written to an address that isn't yours.");
 		return;
 	}
 	
@@ -252,7 +267,7 @@ function cashCheck(check) {
 	wallet.coins += check[1] *1;
 	
 	// Print info
-	l("output").innerHTML = "Coins: " + wallet.coins + "<br><br>A check for " + check[1] + " coins has been added to your wallet.";
+	display(wallet, "A check for " + check[1] + " coins has been added to your wallet.");
 	
 	// Save wallet
 	saveWallet(wallet);
@@ -263,6 +278,10 @@ function cashCheck(check) {
 
 // Cash check	
 function actionCashCheck() {
+	// Get wallet
+	var wallet = getWallet();
+	if(!wallet) return;
+	
 	// Read input into a variable
 	var input = l("input").value;
 	l("input").value = "";
@@ -287,8 +306,34 @@ function actionCashCheck() {
 	
 	// Print Error if not valid
 	if(!valid) {
-		l("output").innerHTML = "Input was not a valid packet.";
+		display(wallet, "Input was not a valid packet.");
 	}
+}
+
+
+
+
+var mineButtonCount = 100;
+function actionMine() {
+	var mineOne = false;
+	mineButtonCount--;
+	if(mineButtonCount === 0) {
+		mineButtonCount = 100;
+		mineOne = true;
+	}
+	
+	var wallet = getWallet();
+	if(wallet) {
+		if(mineOne) {
+			wallet.coins++;
+			display(wallet, "You have mined one coin.");
+		} else {
+			display(wallet);
+		}
+		saveWallet(wallet);
+	}
+	
+	l("mineButton").value = mineButtonCount;
 }
 
 	</script>
@@ -298,9 +343,10 @@ function actionCashCheck() {
 			<input type="button" value="New" onclick="actionNewWallet()">
 			<input type="button" value="Write Check" onclick="actionWriteCheck()">
 			<input type="button" value="Cash Check" onclick="actionCashCheck()">
+			<input id="mineButton" type="button" value="100" onclick="actionMine()">
 		</div>
 		<textarea id="input" placeholder="Check Input"></textarea>
-		<div id="output">Welcome to Cookie Coin!<br><br>Cookie Coin is a relatively cheat proof virtual currency that you can use among your friends. It works by storing numbers on your computer via cookies.<br><br>To start, open a wallet stored on this device or create a new, empty wallet. The five rows of random letters and numbers are your five one-time-use addresses. Every time one is used, it is instantly replaced.</div>
+		<div id="output">Welcome to Cookie Coin!<br><br>Cookie Coin is a relatively cheat proof virtual currency that you can use among your friends. It works by storing numbers on your computer via cookies.<br><br>To start, open a wallet stored on this device or create a new, empty wallet. The five rows of random letters and numbers are your five one-time-use addresses. Every time one is used, it is instantly replaced. To get more money, you can either get people to send you money, or mine money by clicking on the rightmost button.</div>
 	</div>
 </body>
 </html>
