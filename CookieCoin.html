@@ -71,20 +71,19 @@ function hash(string) {
   return hash;
 }
 
-function toPacket(data, type) {
+function toPacket(data) {
 	var hashCode = hash(JSON.stringify(data));
-	var packet = [type, data, hashCode];
+	var packet = [data, hashCode];
 	return btoa(JSON.stringify(packet));
 }
 
 function fromPacket(string) {
 	var packet = JSON.parse(atob(string));
-	var hashCode = hash(JSON.stringify(packet[1]));
-	if(packet[2] === hashCode) {
+	var hashCode = hash(JSON.stringify(packet[0]));
+	if(packet[1] === hashCode) {
 		return {
 			valid: true,
-			type: packet[0],
-			data: packet[1]
+			data: packet[0]
 		};
 	} else {
 		return {
@@ -93,11 +92,22 @@ function fromPacket(string) {
 	}
 }
 
+function genAddress() {
+	var chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+	var address = "";
+	for(var i = 0; i < 5; i++) {
+		address += chars.charAt(Math.floor(Math.random() * chars.length));
+	}
+	return address;
+}
+
 function Wallet() {
-	this.id = Math.random();
 	this.ver = 1;
 	this.coins = 0;
-	this.activeTickets = [];
+	this.addresses = [];
+	for(var i = 0; i < 5; i++) {
+		this.addresses.push(genAddress());
+	}
 }
 
 function getWallet() {
@@ -113,21 +123,12 @@ function getWallet() {
 	if(!packet.valid) return;
 	var wallet = packet.data;
 	
-	// Cleanup wallet
-	var today = new Date();
-	for(var i = 0; i < wallet.activeTickets; i++) {
-		if((new Date(wallet.activeTickets[i][1] + "Z")) < today) {
-			wallet.activeTickets.splice(i, 1);
-			i--;
-		}
-	}
-	
 	// Return packet contents
 	return wallet;
 }
 
 function saveWallet(wallet) {
-	put(toPacket(wallet, "wallet"), walletName);
+	put(toPacket(wallet), walletName);
 }
 
 
@@ -149,7 +150,10 @@ function actionOpenWallet() {
 	
 	// Print Info
 	if(wallet) {
-		l("output").innerHTML = "Coins: " + wallet.coins;
+		l("output").innerHTML = "Coins: " + wallet.coins + "<br><br>Addresses:";
+		for(var i = 0; i < wallet.addresses.length; i++) {
+			l("output").innerHTML += "<br>" + wallet.addresses[i];
+		}
 	} else {
 		l("output").innerHTML = "Sorry, this wallet doesn't exist.";
 	}
@@ -167,7 +171,10 @@ function actionNewWallet() {
 	walletName = prompt("Name:");
 	
 	// Print info
-	l("output").innerHTML = "Coins: " + wallet.coins;
+	l("output").innerHTML = "Coins: " + wallet.coins + "<br><br>Addresses:";
+	for(var i = 0; i < wallet.addresses.length; i++) {
+		l("output").innerHTML += "<br>" + wallet.addresses[i];
+	}
 	
 	// Store new wallet
 	saveWallet(wallet);
@@ -176,38 +183,18 @@ function actionNewWallet() {
 
 
 
-// Generate a ticket
-function actionNewTicket() {
+// Write Check
+function actionWriteCheck() {
 	// Get wallet
 	var wallet = getWallet();
 	if(!wallet) return;
 	
-	// Generate a ticket
-	var num = Math.random();
-	var from = wallet.id;
-	var due = new Date();
-	due.setDate(due.getDate() + 1);
-	
-	// Add ticket to wallet
-	wallet.activeTickets.push([
-		num,
-		due.toUTCString()
-	]);
-	
-	// Give ticket to player
-	l("output").innerHTML = "Coins: " + wallet.coins + "<br><br>Email this to the person you want coins from (expires in 24 hours):<br><br>" + toPacket([num, from], "Tv1");
-	
-	// Save wallet
-	saveWallet(wallet);
-}
-
-
-
-
-// Generate a check
-function newCheck(ticket) {
-	// Get wallet
-	var wallet = getWallet();
+	// Ask for address
+	var address = prompt("What address would you like to write the check to?");
+	if(address.length !== 5) {
+		alert("That is not a valid address.");
+		return;
+	}
 	
 	// Ask for amount
 	var amount;
@@ -232,8 +219,7 @@ function newCheck(ticket) {
 	wallet.coins -= amount;
 	
 	// Give check to player
-	ticket.push(amount);
-	l("output").innerHTML = "Coins: " + wallet.coins + "<br><br>Email this to the person who gave you the ticket:<br><br>" + toPacket(ticket, "Cv1");
+	l("output").innerHTML = "Coins: " + wallet.coins + "<br><br>Email this to the person you're sending money to:<br><br>" + toPacket([address, amount]);
 	
 	// Save wallet
 	saveWallet(wallet);
@@ -246,27 +232,27 @@ function newCheck(ticket) {
 function cashCheck(check) {
 	// Get wallet
 	var wallet = getWallet();
+	if(!wallet) return;
 	
 	// Validate
-	if(wallet.id !== check[1]) return;
 	var verified = false;
-	for(var i = 0; i < wallet.activeTickets.length; i++) {
-		if(wallet.activeTickets[i][0] === check[0]) {
+	for(var i = 0; i < wallet.addresses.length; i++) {
+		if(wallet.addresses[i] === check[0]) {
 			verified = true;
-			wallet.activeTickets.splice(i, 1);
+			wallet.addresses[i] = genAddress();
 			break;
 		}
 	}
 	if(!verified) {
-		l("output").innerHTML = "Coins: " + wallet.coins + "<br><br>The check either isn't for you, or it's ticket has expired (24 hours after printing ticket).";
+		l("output").innerHTML = "Coins: " + wallet.coins + "<br><br>The check was written to an address that isn't yours.";
 		return;
 	}
 	
 	// Add amount to wallet
-	wallet.coins += check[2] *1;
+	wallet.coins += check[1] *1;
 	
 	// Print info
-	l("output").innerHTML = "Coins: " + wallet.coins + "<br><br>A check for " + check[2] + " coins has been added to your wallet.";
+	l("output").innerHTML = "Coins: " + wallet.coins + "<br><br>A check for " + check[1] + " coins has been added to your wallet.";
 	
 	// Save wallet
 	saveWallet(wallet);
@@ -275,8 +261,8 @@ function cashCheck(check) {
 
 
 
-// Scan input
-function actionScanInput() {
+// Cash check	
+function actionCashCheck() {
 	// Read input into a variable
 	var input = l("input").value;
 	l("input").value = "";
@@ -296,14 +282,7 @@ function actionScanInput() {
 	}
 	
 	if(valid) {
-		switch(input.type) {
-			case "Tv1":
-				newCheck(input.data);
-				break;
-			case "Cv1":
-				cashCheck(input.data);
-				break;
-		}
+		cashCheck(input.data);
 	}
 	
 	// Print Error if not valid
@@ -317,11 +296,11 @@ function actionScanInput() {
 		<div id="action-menu">
 			<input type="button" value="Open" onclick="actionOpenWallet()">
 			<input type="button" value="New" onclick="actionNewWallet()">
-			<input type="button" value="Print Ticket" onclick="actionNewTicket()">
-			<input type="button" value="Scan Input" onclick="actionScanInput()">
+			<input type="button" value="Write Check" onclick="actionWriteCheck()">
+			<input type="button" value="Cash Check" onclick="actionCashCheck()">
 		</div>
-		<textarea id="input" placeholder="Packet Input"></textarea>
-		<div id="output">Welcome to Cookie Coin!<br><br>Cookie Coin is a relatively cheat proof virtual currency that you can use among your friends. It works by storing numbers on your computer via cookies.<br><br>To start, open a wallet stored on this device or create a new, empty wallet.<br><br>To get coins from someone, print and send them a ticket. You then have 24 hours to complete the following: They will paste the ticket into the "Packet Input", then click "Scan Input". They then send you a check that you paste into the "Packet Input" and click "Scan Input". That's it!</div>
+		<textarea id="input" placeholder="Check Input"></textarea>
+		<div id="output">Welcome to Cookie Coin!<br><br>Cookie Coin is a relatively cheat proof virtual currency that you can use among your friends. It works by storing numbers on your computer via cookies.<br><br>To start, open a wallet stored on this device or create a new, empty wallet. The five rows of random letters and numbers are your five one-time-use addresses. Every time one is used, it is instantly replaced.</div>
 	</div>
 </body>
 </html>
