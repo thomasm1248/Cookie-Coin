@@ -93,7 +93,7 @@ function fromPacket(string) {
 }
 
 function genAddress() {
-	var chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+	var chars = "abcdefghijklmnopqrstuvwxyz";
 	var address = "";
 	for(var i = 0; i < 5; i++) {
 		address += chars.charAt(Math.floor(Math.random() * chars.length));
