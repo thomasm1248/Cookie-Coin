@@ -315,6 +315,9 @@ function actionCashCheck() {
 
 var mineButtonCount = 100;
 function actionMine() {
+	// Add shortcut for button
+	var button = l("mineButton");
+
 	var mineOne = false;
 	mineButtonCount--;
 	if(mineButtonCount === 0) {
@@ -334,6 +337,11 @@ function actionMine() {
 	}
 	
 	l("mineButton").value = mineButtonCount;
+
+	// Move the button
+	button.style.position = "absolute";
+	button.style.left = Math.random() * (window.innerWidth - button.offsetWidth) + "px";
+	button.style.top = Math.random() * (window.innerHeight - button.offsetHeight) + "px";
 }
 
 	</script>
